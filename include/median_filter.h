@@ -18,12 +18,12 @@ typedef int rc_t;
 #define RC_INCORRECT_BUF_SIZE RC(3)
 
 #define DEFAULT_WINDOW_SIZE 3
+#define MAX_WINDOW_SIZE 255
 
 /**
- * @brief   Performs median filtering of input data
- * 
- * @note    Data should be provided with padding (e.g. zeroes),
- *          or [ws / 2] number of elements will be skipped
+ * @brief   Performs median filtering of input data. 
+ *          Data should be provided with padding (e.g. zeroes),
+ *          or [ws - 1] number of elements will be skipped
  * 
  * @param[in] ws             size of window
  * @param[in] data           pointer to input data
@@ -37,14 +37,14 @@ typedef int rc_t;
  *      or RC_INCORRECT_BUF_SIZE if (fdata_size < data_size)
  */
 rc_t median_filter(size_t ws,
-            const uint8_t* data, size_t data_size,
-            uint8_t* filtered_data, size_t fdata_size);
+            const uint8_t* data, const size_t data_size,
+            uint8_t* filtered_data, const size_t fdata_size);
 
 /*
-(maybe) TODO:
-implement `RC median_filter(FILE* in, FILE* out);`
-and get rid of correctness checks in 
-median_filter(ws, data...) every time
+    (maybe) TODO:
+    implement `RC median_filter(FILE* in, FILE* out);`
+    and get rid of correctness checks (RC_NULL_PTR, RC_WS_NOT_ODD, 
+    RC_INCORRECT_BUF_SIZE) in median_filter(ws, data...) every time
 */
 
 #endif /* MEDIAN_FILTER_H */

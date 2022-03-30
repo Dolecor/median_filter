@@ -9,8 +9,8 @@
 uint8_t median(uint8_t* buf, size_t size);
 
 rc_t median_filter(size_t ws,
-            const uint8_t* data, size_t data_size,
-            uint8_t* filtered_data, size_t fdata_size)
+            const uint8_t* data, const size_t data_size,
+            uint8_t* filtered_data, const size_t fdata_size)
 {
     if (!data || !filtered_data)
     {
@@ -22,7 +22,7 @@ rc_t median_filter(size_t ws,
         return RC_WS_NOT_ODD;
     }
 
-    if (fdata_size < data_size)
+    if (fdata_size + (ws - 1) < data_size)
     {
         return RC_INCORRECT_BUF_SIZE;
     }
