@@ -76,8 +76,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "error in process_input()\n");
     }
 
-    fclose(options.input);
-    fclose(options.output);
+    if (options.input != NULL) fclose(options.input);
+    if (options.output != NULL) fclose(options.output);
 
     return ret;
 }
@@ -93,143 +93,131 @@ int process_input(options_t* options)
     rc_t mf_ret = RC_OK;
     int ret = EXIT_SUCCESS;
     size_t num_read;
-    bool first_iter;
+    bool first_iter = true;
     const size_t WS = options->window_size;
     /* maximum size of elements to add for madian_filter() */
     const size_t MAX_PAD_SIZE = 3 * (WS / 2);
     /* size of skipped elements when calling median_filter() */
     const size_t SKIP_SIZE = options->window_size - 1;
     /* size of batch that contains data batch with maximum possible padding */
-    const size_t MAX_BATCH_SIZE = DATA_BATCH_SIZE + MAX_PAD_SIZE;
+    const size_t MAX_PREPROC_SIZE = DATA_BATCH_SIZE + MAX_PAD_SIZE;
     /* size of filtered data without trailing (skipped) elements */
     const size_t MAX_FILTERED_SIZE = DATA_BATCH_SIZE;
     uint8_t* data_batch =
-        (uint8_t*)calloc(MAX_BATCH_SIZE, sizeof(uint8_t));
+        (uint8_t*)calloc(DATA_BATCH_SIZE, sizeof(uint8_t));
+    uint8_t* preprocessed_data =
+        (uint8_t*)calloc(MAX_PREPROC_SIZE, sizeof(uint8_t));
     uint8_t* filtered_batch =
         (uint8_t*)calloc(MAX_FILTERED_SIZE, sizeof(uint8_t));
-    /* actual values */
-    size_t act_head_pad_size;
-    size_t act_tail_pad_size;
-    size_t act_batch_size;
-    size_t act_filter_size;
-    first_iter = true;
+    /* actual sizes */
+    size_t head_pad_size;
+    size_t tail_pad_size;
+    size_t data_size;
+    size_t preproc_size;
+    size_t filter_size;
 
     while (!feof(options->input))
     {
+        num_read = fread(data_batch, sizeof(uint8_t),
+                         DATA_BATCH_SIZE, options->input);
+        data_size = num_read;
+
+        /* Preprocess data */
         if (first_iter) /* first read from data stream */
         {
-            bool iseof;
-            act_head_pad_size = WS / 2;
-            num_read = fread(data_batch + act_head_pad_size, sizeof(uint8_t),
-                             DATA_BATCH_SIZE, options->input);
-            iseof = feof(options->input);
-
-            /* stream is empty */
-            if (iseof && num_read == 0)
+            /* Stream is empty */
+            if (feof(options->input) && num_read == 0)
             {
                 fprintf(stderr, "stream/file was empty");
                 ret = EXIT_FAILURE;
                 goto cleanup;
             }
 
-            /* special case when EOF occured on first read but num_read > 0,
+            /* Special case when EOF occured on first read but num_read > 0,
                i.e. size of data is less than size of data batch */
-            if (iseof && num_read < DATA_BATCH_SIZE)
+            if (feof(options->input) && num_read < DATA_BATCH_SIZE)
             {
-                act_tail_pad_size = WS / 2;
-                act_batch_size = num_read + act_head_pad_size + act_tail_pad_size;
-                act_filter_size = num_read;
-                /* adds two blocks of padding in head and tail that repeats values of the data batch */
-                memset(data_batch,
-                       data_batch[act_head_pad_size],
-                       sizeof(uint8_t) * act_head_pad_size);
-                memset(data_batch + num_read + act_head_pad_size,
-                       data_batch[num_read + act_head_pad_size],
-                       sizeof(uint8_t) * act_tail_pad_size);
-
-                mf_ret = median_filter(WS, data_batch, act_batch_size,
-                                       filtered_batch, act_filter_size);
-
-                if (mf_ret != RC_OK)
-                {
-                    fprintf(stderr, "filter fail: rc=%d\n", mf_ret);
-                    ret = EXIT_FAILURE;
-                    goto cleanup;
-                }
+                head_pad_size = WS / 2;
+                tail_pad_size = WS / 2;
+                preproc_size = data_size + head_pad_size + tail_pad_size;
+                filter_size = data_size;
+                memcpy(preprocessed_data + head_pad_size,
+                       data_batch, sizeof(uint8_t) * data_size);
+                /* Add two blocks of padding in head and tail that repeats values of the data batch */
+                memset(preprocessed_data,
+                       data_batch[0],
+                       sizeof(uint8_t) * head_pad_size);
+                memset(preprocessed_data + data_size + head_pad_size,
+                       data_batch[data_size],
+                       sizeof(uint8_t) * tail_pad_size);
             }
             else /* if num_read == DATA_BATCH_SIZE */
             {
-                act_tail_pad_size = 0;
-                act_batch_size = num_read + act_head_pad_size;
-                act_filter_size = num_read;
-                /* adds block of padding in head that repeats values of the data batch */
-                memset(data_batch,
-                       data_batch[act_head_pad_size],
-                       sizeof(uint8_t) * act_head_pad_size);
-
-                mf_ret = median_filter(WS, data_batch, act_batch_size,
-                                       filtered_batch, act_filter_size);
-
-                if (mf_ret != RC_OK)
-                {
-                    fprintf(stderr, "filter fail: rc=%d\n", mf_ret);
-                    ret = EXIT_FAILURE;
-                    goto cleanup;
-                }
+                head_pad_size = WS / 2;
+                tail_pad_size = 0;
+                preproc_size = data_size + head_pad_size;
+                filter_size = data_size - WS / 2;
+                memcpy(preprocessed_data + head_pad_size,
+                       data_batch, sizeof(uint8_t) * data_size);
+                /* Add block of padding in head that repeats values of the data batch */
+                memset(preprocessed_data,
+                       data_batch[0],
+                       sizeof(uint8_t) * head_pad_size);
             }
 
             first_iter = false;
         }
+        else if (num_read == DATA_BATCH_SIZE) /* data stream continues */
+        {
+            head_pad_size = 2 * (WS / 2);
+            tail_pad_size = 0;
+
+            /* Copy elements from tail of previous data batch.
+               Values from previous iteration are used. */
+            memcpy(preprocessed_data,
+                   preprocessed_data + preproc_size - head_pad_size,
+                   sizeof(uint8_t) * head_pad_size);
+
+            preproc_size = data_size + head_pad_size + tail_pad_size;
+            filter_size = data_size;
+            memcpy(preprocessed_data + head_pad_size,
+                   data_batch, sizeof(uint8_t) * data_size);
+        }
         else if (feof(options->input)) /* end of data stream */
         {
-            // WIP
-            printf("feof(options->input)\n");
-        }
-        else if (num_read == DATA_BATCH_SIZE) /* data stream continues  */
-        {
+            head_pad_size = 2 * (WS / 2);
+            tail_pad_size = WS / 2;
 
-            printf("num_read == DATA_BATCH_SIZE\n");
-            // WIP program reaches here from first_iter when num_read = DATA_BATCH_SIZE
-            // so just exit function by now
-            ret = EXIT_SUCCESS;
+            /* Copy elements from tail of previous data batch.
+               Values from previous iteration are used. */
+            memcpy(preprocessed_data,
+                   preprocessed_data + preproc_size - head_pad_size,
+                   sizeof(uint8_t) * head_pad_size);
+
+            preproc_size = data_size + head_pad_size + tail_pad_size;
+            filter_size = data_size + WS / 2;
+            memcpy(preprocessed_data + head_pad_size,
+                   data_batch, sizeof(uint8_t) * data_size);
+        }
+
+        mf_ret = median_filter(WS, preprocessed_data, preproc_size,
+                               filtered_batch, filter_size);
+
+        if (mf_ret != RC_OK)
+        {
+            fprintf(stderr, "median_filter() failed: rc=%d\n", mf_ret);
+            ret = EXIT_FAILURE;
             goto cleanup;
         }
 
         fwrite(filtered_batch, sizeof(uint8_t),
-               act_filter_size, options->output);
+               filter_size, options->output);
     }
 
 cleanup:
     free(data_batch);
+    free(preprocessed_data);
     free(filtered_batch);
 
     return ret;
 }
-
-// uint8_t data[] = {0, 2, 3, 80, 6, 2, 3, 0};
-
-
-// int main(int argc, char *argv[])
-// {
-//     rc_t ret = RC_OK;
-//     size_t data_size = sizeof(data) / sizeof(*data);
-//     uint8_t* filtered = (uint8_t*)calloc(data_size, sizeof(*data));
-
-//     ret = median_filter(DEFAULT_WINDOW_SIZE, data, data_size, filtered, data_size);
-
-//     for (size_t i = 0; i < data_size; ++i)
-//     {
-//         printf("%u", data[i]);
-//         printf(" ");
-//     }
-
-//     printf("\n");
-
-//     for (size_t i = 0; i < data_size; ++i)
-//     {
-//         printf("%u", filtered[i]);
-//         printf(" ");
-//     }
-
-//     return EXIT_SUCCESS;
-// }

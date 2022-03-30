@@ -18,7 +18,7 @@ def plot_signal(file_noised_signal, file_filtered_signal):
     plt.title("Signal with noise")
 
     plt.subplot(2, 1, 2)
-    plt.ylim(0, 255)
+    plt.ylim(Y_MIN, Y_MAX)
     plt.plot(t, filtered)
     plt.title("Filtered signal")
 

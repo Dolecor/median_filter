@@ -29,7 +29,7 @@ typedef int rc_t;
  * @param[in] data           pointer to input data
  * @param[in] data_size      size of data
  * @param[out] filtered_data pointer to median-filtered data
- * @param[in] fdata_size     size of filtered_data
+ * @param[in] filtered_size  size of filtered_data
  * @return rt_t
  *      RC_OK if success, 
  *      RC_NULL_PTR if data or filtered_data is NULL, 
@@ -38,7 +38,7 @@ typedef int rc_t;
  */
 rc_t median_filter(size_t ws,
             const uint8_t* data, const size_t data_size,
-            uint8_t* filtered_data, const size_t fdata_size);
+            uint8_t* filtered_data, const size_t fdafiltered_sizeta_size);
 
 /*
     (maybe) TODO:
