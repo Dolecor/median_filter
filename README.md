@@ -1,5 +1,3 @@
-WIP
-
 # Описание
 
 Консольная утилита для Linux, которая реализует медианный фильтр.
@@ -12,7 +10,7 @@ WIP
 -h (help):
 ```bash
 $ ./median_filter -h
-median_filter [-i input-file] [-o output-file] [-w window-size] [-h]
+median_filter [-i input-file] [-o output-file] [-w window-size] [-b batch-size] [-h]
 ```
 
 Пример (см. `/utils`):
